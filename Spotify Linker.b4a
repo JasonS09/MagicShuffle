@@ -1,0 +1,425 @@
+﻿Build1=Default,b4a.SpotifyLinker
+File1=Config.bal
+File2=Layout.bal
+File3=Track.bal
+FileGroup1=Default Group
+FileGroup2=Default Group
+FileGroup3=Default Group
+Group=Default Group
+Library1=core
+Library2=json
+Library3=keyvaluestore
+Library4=okhttputils2
+Library5=phone
+Library6=preoptimizedclv
+Library7=reflection
+Library8=xui
+ManifestCode='This code will be applied to the manifest file during compilation.~\n~'You do not need to modify it in most cases.~\n~'See this link for for more information: https://www.b4x.com/forum/showthread.php?p=78136~\n~AddManifestText(~\n~<uses-sdk android:minSdkVersion="14" android:targetSdkVersion="29"/>~\n~<supports-screens android:largeScreens="true" ~\n~    android:normalScreens="true" ~\n~    android:smallScreens="true" ~\n~    android:anyDensity="true"/>)~\n~AddActivityText("main",~\n~<intent-filter>~\n~    <action android:name="android.intent.action.VIEW" />~\n~    <category android:name="android.intent.category.DEFAULT"></category>~\n~    <category android:name="android.intent.category.BROWSABLE"></category>~\n~   <data android:scheme="http" />~\n~   <data android:host="jsspotifylinker.myd" />~\n~</intent-filter> )~\n~SetApplicationAttribute(android:icon, "@drawable/icon")~\n~SetApplicationAttribute(android:label, "$LABEL$")~\n~CreateResourceFromFile(Macro, Themes.LightTheme)~\n~'End of default text.~\n~
+Module1=Common
+Module2=Config
+Module3=Starter
+NumberOfFiles=3
+NumberOfLibraries=8
+NumberOfModules=3
+Version=11
+@EndOfDesignText@
+#Region  Project Attributes 
+	#ApplicationLabel: Spotify Linker
+	#VersionCode: 1
+	#VersionName: 
+	'SupportedOrientations possible values: unspecified, landscape or portrait.
+	#SupportedOrientations: unspecified
+	#CanInstallToExternalStorage: False
+#End Region
+
+#Region  Activity Attributes 
+	#FullScreen: False
+	#IncludeTitle: True
+#End Region
+
+#Region Alternatives
+
+'Sub GenerateCodeChallenge
+'	Dim code As StringBuilder
+'	code.Initialize
+'	Dim characters As String = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890_.-~"
+'	
+'	For i = 0 To 127
+'		code.Append(characters.CharAt(Rnd(0, characters.Length-1)))
+'	Next
+'	
+'	Dim m As MessageDigest
+'	Dim su As StringUtils
+'	
+'	Log(code.ToString)
+'	
+'	Challenge = Regex.Replace("=", _
+'		Regex.Replace("/", _
+'			Regex.Replace("\+", _
+'				su.EncodeBase64( _
+'					m.GetMessageDigest( _
+'						code.ToString.GetBytes("UTF8"), "SHA-256" _
+'					) _
+'				), _
+'			"-"), _
+'		"_"), _
+'	"")
+'	
+'	Log(Challenge)
+'End Sub
+'
+' --------------FOR AUTHORIZEUSER --------------------------
+'Dim getParams As String = "client_id=" & clientId & "&" _
+'							& "response_type=code&" _
+'							& "redirect_uri=" & redirectUri & "&" _
+'							& "code_challenge_method=S256&" _
+'							& "code_challenge=" & Challenge & "&" _
+'							& "scope=user-modify-playback-state " _
+'								& "playlist-modify-public " _
+'								& "playlist-read-private " _
+'								& "user-read-playback-state " _
+'								& "user-read-private " _
+'								& "user-read-email&" _
+'							& "state=wR4ljc"
+
+'---------------FOR AUTHORIZEAPP ------------------------------
+'j.PostString("https://accounts.spotify.com/api/token", "client_id=" & clientId & "&" _
+'														& "grant_type=authorization_code&" _
+'														& "code=" & code & "&" _ 
+'														& "redirect_uri=" & redirectUri & "&" _
+'														& "code_verifier=" & Challenge)
+
+#End Region
+
+Sub Process_Globals
+	'These global variables will be declared once when the application starts.
+	'These variables can be accessed from all modules.
+	Private xui As XUI
+	Private clientId As String = "e5670e31bc99419f83957d70e0c71df5"
+	Private clientSecret As String = "032d2156bdab45468bfc6286bfce43b5"
+End Sub
+
+Sub Globals
+	'These global variables will be redeclared each time the activity is created.
+	'Private refreshToken As String
+	Private redirectUri As String = "http://jsspotifylinker.myd"
+	Private TxtUsername As EditText
+	Private TxtPlaylist As EditText
+	Private BShuffle As Button
+	Private BConfig As Button
+	Private PlayListId As String
+	'Dim Challenge As String
+End Sub
+
+Sub Activity_Create(FirstTime As Boolean)
+	Activity.LoadLayout("Layout")
+	Activity.Title = "MagicShuffle"
+	
+	If FirstTime Then
+		Common.KVS.Initialize(File.DirInternal, "datastore")
+		
+		If Common.KVS.ContainsKey("user") Then
+			TxtUsername.Text = Common.KVS.Get("user")
+		End If
+	
+		If Common.KVS.ContainsKey("tracks") Then
+			Common.Tracks = Common.ToB4XOrderedMap(Common.KVS.Get("tracks"))
+		Else
+			Common.Tracks.Initialize
+		End If
+		
+		If Common.KVS.ContainsKey("playlist_name") Then
+			TxtPlaylist.Text = Common.KVS.Get("playlist_name")
+		End If
+		
+		If Common.KVS.ContainsKey("links") Then
+			Common.LinkList = Common.KVS.Get("links")
+		Else
+			Common.LinkList.Initialize
+		End If
+		
+		If Common.KVS.ContainsKey("linked_tracks") Then
+			Common.LinkedTracks = Common.KVS.Get("linked_tracks")
+		Else
+			Common.LinkedTracks.Initialize
+		End If
+	End If
+End Sub
+
+Sub Activity_Resume
+	Dim i As Intent
+	i = GetIntent
+	If i.Action = i.ACTION_VIEW And Common.Token = "" Then
+		Dim uri As String
+		uri=i.GetData
+		AuthorizeApp(Regex.Split("&", Regex.Split("=", uri)(1))(0))
+	End If
+End Sub
+
+Sub Activity_Pause (UserClosed As Boolean)
+
+End Sub
+
+Sub GetIntent As Intent
+	Dim sR As Reflector
+	sR.Target=sR.GetActivity
+	Return sR.RunMethod("getIntent")
+End Sub
+
+Sub Deauthorize
+	TxtUsername.Enabled = False
+	TxtPlaylist.Enabled = False
+	BShuffle.Enabled = False
+	BConfig.Enabled = False
+End Sub
+
+Sub Authorize
+	TxtUsername.Enabled = True
+	TxtPlaylist.Enabled = True
+	BShuffle.Enabled = True
+	BConfig.Enabled = True
+End Sub
+
+Sub Shuffle(auxTracks As B4XOrderedMap)	 As String
+	Dim shuffledBuilder As StringBuilder
+	shuffledBuilder.Initialize
+	
+	Do While Not(auxTracks.Size = 0)
+		Dim r As Int = Rnd(0, auxTracks.Size)
+		If auxTracks.Size = 1 Then
+			shuffledBuilder.Append(auxTracks.Get(auxTracks.Keys.Get(0))) 
+			Return shuffledBuilder.ToString
+		End If
+		
+		shuffledBuilder.Append(auxTracks.Get(auxTracks.Keys.Get(r)) & ",")
+		auxTracks.Remove(auxTracks.Keys.Get(r))
+	Loop
+	
+	Return ""
+End Sub
+
+Sub RebuildTracks As B4XOrderedMap
+	Dim auxTracks As B4XOrderedMap
+	auxTracks.Initialize
+	
+	For Each key In Common.Tracks.Keys
+		auxTracks.Put(key, Common.Tracks.Get(key))
+	Next
+	
+	Dim i As Int = 0
+	
+	Do While i < auxTracks.Keys.Size
+		
+		Dim auxKey As String = auxTracks.Keys.Get(i)
+		
+		For Each link As OrderedMap In Common.LinkedTracks
+			For Each kkey As String In link.Keys
+				If auxKey = kkey Then
+					auxTracks.Remove(auxKey)
+					i = i-1
+				End If
+			Next
+		Next
+		
+		i = i+1
+	Loop
+	
+	For Each linkk As Link In Common.LinkList
+		auxTracks.Put(linkk.LabelLink, linkk.uris)
+	Next
+	
+	Return auxTracks
+End Sub
+
+Sub AuthorizeUser
+	Dim getParams As String = "client_id=" & clientId & "&" _
+							& "response_type=code&" _
+							& "redirect_uri=" & redirectUri & "&" _
+							& "scope=user-modify-playback-state " _
+								& "playlist-modify-public " _
+								& "playlist-read-private " _
+								& "user-read-playback-state " _
+								& "user-read-private " _
+								& "user-read-email&" _
+							& "state=wR4ljc"
+	Dim p As PhoneIntents
+	StartActivity(p.OpenBrowser("https://accounts.spotify.com/authorize?" & getParams))
+End Sub
+
+Sub AuthorizeApp(code As String)
+	Dim j As HttpJob
+	Dim su As StringUtils
+	Dim authorization As String = clientId & ":" & clientSecret
+	j.Initialize("j", Me)
+	j.PostString("https://accounts.spotify.com/api/token", "grant_type=authorization_code&" _
+															& "code=" & code & "&" _ 
+															& "redirect_uri=" & redirectUri)
+	j.GetRequest.SetContentType("application/x-www-form-urlencoded")
+	j.GetRequest.SetHeader("Authorization", _
+							"Basic " & su.EncodeBase64(authorization.GetBytes("UTF8")))
+	Wait For (j) JobDone(j As HttpJob)
+	
+	If j.Success And j.Response.StatusCode = 200 Then
+		Dim jp As JSONParser
+		jp.Initialize(j.GetString)
+		Dim Map As Map = jp.NextObject
+		Common.Token = Map.Get("access_token")
+		'refreshToken = Map.Get("refresh_token")
+		Authorize
+		GetUserId
+		Return
+	End If
+		
+	If Not(j.Response.StatusCode = -1) Then
+		Common.HandleHTTPError(j.GetString)
+		If j.Response.StatusCode = 401 Then
+			Deauthorize
+		End If
+	End If
+		
+	Log("Error in app Authorization")
+End Sub
+
+Sub GetUserId	
+	Dim j As HttpJob
+	j.Initialize("j", Me)
+	j.Download("https://api.spotify.com/v1/me")
+	j.GetRequest.SetHeader("Authorization", "Bearer " & Common.Token)
+	Wait For (j) JobDone(j As HttpJob)
+	
+	If j.Success And j.Response.StatusCode = 200 Then
+		Dim jp As JSONParser
+		jp.Initialize(j.GetString)
+		Dim userId As String = jp.NextObject.Get("id")
+		TxtUsername.Text = userId
+		Common.KVS.Put("user", userId)
+		Return
+	End If
+	
+	If Not(j.Response.StatusCode = -1) Then
+		Common.HandleHTTPError(j.GetString)
+		If j.Response.StatusCode = 401 Then
+			Deauthorize
+		End If
+	End If
+	
+	Log("Error getting user id")
+End Sub
+
+Sub GetPlaylist As ResumableSub
+	If Not(PlayListId = "") Then
+		Return Null
+	End If
+	
+	Dim j As HttpJob
+	j.Initialize("j", Me)
+	j.Download2("https://api.spotify.com/v1/users/" & TxtUsername.Text & "/playlists", _
+		Array As String("limit", "50"))
+	j.GetRequest.SetHeader("Authorization", "Bearer " & Common.Token)
+	Wait For (j) JobDone(j As HttpJob)
+	
+	If j.Success And j.Response.StatusCode = 200 Then
+		Dim jp As JSONParser
+		jp.Initialize(j.GetString)
+		Dim playlists As List = jp.NextObject.Get("items")
+		
+		For Each playlist As Map In playlists
+			If playlist.Get("name") = TxtPlaylist.Text Then
+				Dim id As String = playlist.Get("id")
+				PlayListId = id
+			End If
+		Next
+	Else If Not(j.Response.StatusCode = -1) Then
+		Common.HandleHTTPError(j.GetString)
+		If j.Response.StatusCode = 401 Then
+			Deauthorize
+		End If
+		Log("Error getting playlists.")
+	End If
+	
+	Return Null
+End Sub
+
+Sub RemoveItemsFromPlaylist As ResumableSub
+	Wait For (GetPlaylist) Complete (playlist As Object)
+	Dim j As HttpJob
+	j.Initialize("j", Me)		
+	Dim data As List
+	data.Initialize
+	
+	For Each track As String In Common.Tracks.Values
+		data.Add(CreateMap("uri":track))
+	Next
+	
+	Dim JSONGenerator As JSONGenerator
+	JSONGenerator.Initialize(CreateMap("tracks":data))
+	j.PostString("https://api.spotify.com/v1/playlists/" & PlayListId & "/tracks", _
+				JSONGenerator.ToString)
+	j.GetRequest.InitializeDelete2("https://api.spotify.com/v1/playlists/" & PlayListId & "/tracks", _
+									JSONGenerator.ToString.GetBytes("UTF8"))
+	j.GetRequest.SetHeader("Authorization", "Bearer " & Common.Token)
+
+	Wait For (j) JobDone(j As HttpJob)
+	
+	If Not(j.Success And j.Response.StatusCode = 200) Then
+		If Not(j.Response.StatusCode = -1) Then
+			Common.HandleHTTPError(j.GetString)
+			If j.Response.StatusCode = 401 Then
+				Deauthorize
+			End If
+		End If
+		
+		Log("Error removing the playlist.")
+	End If
+	
+	Return Null
+End Sub
+
+Sub AddSongsToPlaylist(shuffled As String)
+	Wait For (GetPlaylist) Complete (playlist As Object)
+	Dim j As HttpJob
+	j.Initialize("j", Me)
+	Dim su As StringUtils
+	j.PostString("https://api.spotify.com/v1/playlists/" & _
+	 			PlayListId & "/tracks?uris=" & _
+				su.EncodeUrl(shuffled, "UTF-8"), "")
+	j.GetRequest.SetHeader("Authorization", "Bearer " & Common.Token)
+	Wait For (j) JobDone(j As HttpJob)
+	
+	If Not(j.Success And j.Response.StatusCode = 201) Then
+		If Not(j.Response.StatusCode = -1) Then
+			Log(j.Response.StatusCode)
+			Common.HandleHTTPError(j.GetString)
+			If j.Response.StatusCode = 401 Then
+				Deauthorize
+			End If
+		End If
+		
+		Log("Error removing the playlist.")
+	End If
+End Sub
+
+Sub BConnect_Click
+	AuthorizeUser
+End Sub
+
+Private Sub BShuffle_Click
+	If Common.Tracks.Size = 0 Or Common.LinkList.Size = 0 Then
+		ToastMessageShow("No tracks have been saved.", False)
+		Log("No tracks have been saved.")
+		Return
+	End If
+	
+	Wait For (RemoveItemsFromPlaylist) Complete (o As Object)
+	AddSongsToPlaylist(Shuffle(RebuildTracks))
+	Common.KVS.Put("playlist_name", TxtPlaylist.Text)
+	ToastMessageShow("You playlist has been successfully shuffled!", False)
+End Sub
+
+Private Sub BExit_Click
+	Activity.Finish
+End Sub
+
+Private Sub BConfig_Click
+	StartActivity(Config)
+End Sub
