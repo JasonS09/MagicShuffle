@@ -96,7 +96,7 @@ Sub Process_Globals
 	'These variables can be accessed from all modules.
 	Private xui As XUI
 	Private clientId As String = "e5670e31bc99419f83957d70e0c71df5"
-	Private clientSecret As String = "032d2156bdab45468bfc6286bfce43b5"
+	Private clientSecret As String
 End Sub
 
 Sub Globals
@@ -108,6 +108,7 @@ Sub Globals
 	Private BShuffle As Button
 	Private BConfig As Button
 	Private PlayListId As String
+	Private UserId As String
 	'Dim Challenge As String
 End Sub
 
@@ -117,9 +118,14 @@ Sub Activity_Create(FirstTime As Boolean)
 	
 	If FirstTime Then
 		Common.KVS.Initialize(File.DirInternal, "datastore")
+		clientSecret = File.ReadString(File.DirAssets, "secret.txt")
 		
 		If Common.KVS.ContainsKey("user") Then
-			TxtUsername.Text = Common.KVS.Get("user")
+			UserId = Common.KVS.Get("user")
+		End If
+		
+		If Common.KVS.ContainsKey("user_name") Then
+			TxtUsername.Text = Common.KVS.Get("user_name")
 		End If
 	
 		If Common.KVS.ContainsKey("tracks") Then
@@ -290,9 +296,11 @@ Sub GetUserId
 	If j.Success And j.Response.StatusCode = 200 Then
 		Dim jp As JSONParser
 		jp.Initialize(j.GetString)
-		Dim userId As String = jp.NextObject.Get("id")
-		TxtUsername.Text = userId
-		Common.KVS.Put("user", userId)
+		Dim user As Map = jp.NextObject
+		UserId = user.Get("id")
+		TxtUsername.Text = user.Get("display_name")
+		Common.KVS.Put("user", UserId)
+		Common.KVS.Put("user_name", TxtUsername.Text)
 		Return
 	End If
 	
@@ -313,7 +321,7 @@ Sub GetPlaylist As ResumableSub
 	
 	Dim j As HttpJob
 	j.Initialize("j", Me)
-	j.Download2("https://api.spotify.com/v1/users/" & TxtUsername.Text & "/playlists", _
+	j.Download2("https://api.spotify.com/v1/users/" & UserId & "/playlists", _
 		Array As String("limit", "50"))
 	j.GetRequest.SetHeader("Authorization", "Bearer " & Common.Token)
 	Wait For (j) JobDone(j As HttpJob)
